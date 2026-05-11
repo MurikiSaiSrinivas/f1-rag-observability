@@ -130,11 +130,20 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 | Phase | Goal | Status |
 |---|---|---|
 | 0 | Scope lock | Done (2026-05-10) |
-| 1 | Data collection (Ergast/Jolpica, Wikipedia, FIA PDFs) | **In progress** |
-| 2 | Chunking, embedding, indexing (Chroma) | Pending |
+| 1 | Data collection (Ergast/Jolpica, Wikipedia, FIA PDFs) | Done (2026-05-11) |
+| 2 | Chunking, embedding, indexing (Chroma) | **Next** |
 | 3 | Basic RAG pipeline (deliberately not over-engineered) | Pending |
 | 4 | Observability layer (the product — largest phase) | Pending |
 | 5 | Feedback loop demo (pick 3 real failures, fix, document before/after) | Pending |
+
+### Phase 1 final corpus
+
+- 531 documents total
+- **Ergast/Jolpica**: 304 files (6,375 structured records across results, qualifying, standings, drivers, constructors, circuits, sprints) — 2020-2025, 131 races
+- **Wikipedia**: 215 articles (131 races + 30 circuits + 40 drivers + 14 constructors), ~3.5M chars plaintext
+- **FIA regulations**: 12 PDFs extracted to text (sporting + technical × 6 seasons), ~4.5M chars
+- ~8M chars of natural-language corpus + structured JSON to enrich it
+- All cataloged in `data/manifest.jsonl` (one row per source document)
 
 ## Principles / rules
 
