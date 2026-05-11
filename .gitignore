@@ -28,6 +28,7 @@ node_modules/
 .claude/settings.local.json
 
 # Logs / databases
+logs/
 *.log
 *.sqlite
 *.sqlite3

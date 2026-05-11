@@ -48,7 +48,7 @@ wheels = [
 [[package]]
 name = "f1-rag-observability"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "pypdf" },

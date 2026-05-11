@@ -1,10 +1,41 @@
 """CLI entrypoint that orchestrates Phase 1 collectors.
 
 Usage:
-    python scripts/collect.py --source ergast
-    python scripts/collect.py --source wikipedia
-    python scripts/collect.py --source fia
-    python scripts/collect.py --source all
+    uv run python scripts/collect.py --source ergast
+    uv run python scripts/collect.py --source wikipedia
+    uv run python scripts/collect.py --source fia
+    uv run python scripts/collect.py --source all
 """
 
-# TODO: Phase 1 — implement CLI
+from __future__ import annotations
+
+import argparse
+import sys
+
+from ingestion.collect import ergast
+
+SOURCES = ("ergast", "wikipedia", "fia", "all")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Collect raw F1 data for the RAG corpus.")
+    parser.add_argument(
+        "--source",
+        required=True,
+        choices=SOURCES,
+        help="Which source to collect (or 'all').",
+    )
+    args = parser.parse_args()
+
+    if args.source in ("ergast", "all"):
+        ergast.collect()
+    if args.source in ("wikipedia", "all"):
+        print("Wikipedia collector not yet implemented (Phase 1, next step).", file=sys.stderr)
+    if args.source in ("fia", "all"):
+        print("FIA collector not yet implemented (Phase 1, next step).", file=sys.stderr)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
