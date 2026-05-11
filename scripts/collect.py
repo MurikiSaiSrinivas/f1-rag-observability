@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ingestion.collect import ergast
+from ingestion.collect import ergast, wikipedia
 
 SOURCES = ("ergast", "wikipedia", "fia", "all")
 
@@ -30,7 +30,7 @@ def main() -> int:
     if args.source in ("ergast", "all"):
         ergast.collect()
     if args.source in ("wikipedia", "all"):
-        print("Wikipedia collector not yet implemented (Phase 1, next step).", file=sys.stderr)
+        wikipedia.collect()
     if args.source in ("fia", "all"):
         print("FIA collector not yet implemented (Phase 1, next step).", file=sys.stderr)
 
