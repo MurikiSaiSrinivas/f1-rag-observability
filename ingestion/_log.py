@@ -30,6 +30,11 @@ def configure_index_logger(source: str) -> Path:
     return _configure_phase_logger("index", source)
 
 
+def configure_build_db_logger(source: str) -> Path:
+    """Configure `ingestion.build_db.{source}` logger. Returns log file path."""
+    return _configure_phase_logger("build_db", source)
+
+
 def _configure_phase_logger(phase: str, source: str) -> Path:
     """Configure `ingestion.{phase}.{source}` logger with a fresh per-run log file.
 
