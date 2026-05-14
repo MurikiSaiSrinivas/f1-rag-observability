@@ -24,6 +24,112 @@ This is an **observability project**, not a RAG project. The RAG pipeline is the
 7. **Bad Answers dashboard** — per flagged trace: question, chunks, answer, prompt version, model, cost, latency, faithfulness, feedback, failure reason
 8. **Close the feedback loop** — trace → score → flag → debug → fix → retest
 
+## Observability architecture (locked 2026-05-14)
+
+The full product architecture for the dashboard side of the project. Locked before Phase 2 begins so chunking captures the right metadata up-front and we don't pay the cost of a re-chunk/re-embed cycle later.
+
+### Identity & access
+
+- **No user accounts.** Each browser gets a UUID stored in cookie/localStorage as `client_id` on first visit.
+- **Users see own history only** — backend filters by `client_id`.
+- **Admin** is a separate role guarded by a hardcoded password in the `ADMIN_PASSWORD` env var; signed cookie after login. Single-tenant — one admin.
+- **Accepted limitations:** cleared cookies → new identity; different devices → different identities. Fine for portfolio scope.
+
+### Per-request data flow
+
+Each `POST /ask` produces one trace, indexed by `request_id`:
+
+1. **Capture request** — `request_id`, `client_id`, `session_id`, question, timestamp, model, prompt_version.
+2. **Input guardrails** — off-topic, prompt-injection, PII detection, length checks. May abort.
+3. **Embed question** — one OpenAI call; record tokens + latency.
+4. **Vector search in Chroma** — top-k chunks with similarity scores.
+5. **Retrieval guardrails** — low-similarity warning, empty-retrieval abort.
+6. **Assemble prompt** — record which retrieved chunks made it into context vs. trimmed (retrieved-vs-used distinction).
+7. **LLM call** — tokens in/out, latency, cost.
+8. **Output guardrails** — hallucination flag, PII-leak block, cost-spike flag.
+9. **Return answer** to user, with the relevant guardrail reasons attached if any triggered.
+10. **Async:** RAGAS scoring (faithfulness, relevance), flag rules.
+11. **User feedback** — thumbs up/down + optional comment, attached to `request_id`.
+
+### Data model (Phase 4 — Postgres)
+
+| Table | Purpose |
+|---|---|
+| `clients` | Anonymous browser identities (UUID, first_seen_at, last_seen_at) |
+| `sessions` | A conversation; many requests per session |
+| `requests` | The central trace anchor: question, answer, model, prompt_version, tokens, cost, latency, final_status |
+| `request_chunks` | Many-to-many: chunks retrieved per request, with rank, similarity, `used_in_prompt` flag |
+| `chunks` | Materialized chunks with provenance metadata (mirror of `data/chunks/chunks.jsonl`) |
+| `spans` | Per-step latency rows for the latency-breakdown view |
+| `scores` | RAGAS metric rows per request |
+| `flags` | Flag-rule outputs |
+| `guardrails_triggered` | Which guardrails fired per request, with stage, action, severity, reason |
+| `feedback` | Thumbs + comments per request |
+
+### Chunk metadata schema (set at Phase 2)
+
+Every chunk carries enough metadata to power all observability features downstream. Capturing this now avoids re-chunking + re-embedding later:
+
+```json
+{
+  "chunk_id": "wikipedia/races/2023_bahrain_grand_prix#0007",
+  "source": "wikipedia",
+  "source_file_path": "data/raw/wikipedia/races/2023_bahrain_grand_prix.txt",
+  "char_start": 4823,
+  "char_end": 6210,
+  "page_number": null,
+  "text": "...",
+  "title": "2023 Bahrain Grand Prix",
+  "url": "https://en.wikipedia.org/wiki/2023_Bahrain_Grand_Prix",
+  "metadata": {"season": 2023, "category": "races"}
+}
+```
+
+- **Wikipedia chunks:** `source_file_path` is the `.txt`; `char_start`/`char_end` enable exact-text highlighting.
+- **FIA chunks:** `source_file_path` is the **PDF** (not the `.txt`); `page_number` set; chunking runs on the extracted `.txt` but the dashboard renders the PDF.
+- **Ergast chunks:** no `char_start`/`char_end`; `metadata.record_index` instead; chunk text is the synthesized natural-language sentence.
+
+### Provenance UI
+
+- **Wikipedia chunks:** open the `.txt` in a content panel, highlight `char_start:char_end` in yellow.
+- **FIA chunks:** open the PDF in a PDF.js viewer; navigate to `page_number`; highlight chunk text via PDF.js's text-layer search (no coordinate math — works because regulation PDFs are single-column).
+- **Ergast chunks:** caption "from JSON record X in file Y" + the synthesized sentence; no highlight (synthesized text has no source span).
+
+### Guardrails
+
+Hand-rolled rules for ~10 cases + **Guardrails AI** for one rule (`DetectPII`) — demonstrates fluency with both DIY rules and the standard library.
+
+| Stage | Rule | Implementation | Effect |
+|---|---|---|---|
+| Input | `off_topic` | Hand-rolled (keyword + LLM fallback) | Refuse politely |
+| Input | `prompt_injection` | Hand-rolled (pattern match) | Refuse |
+| Input | `pii_in_question` | **Guardrails AI `DetectPII`** | Sanitize before logging |
+| Input | `empty_or_too_short` | Hand-rolled | Reject |
+| Input | `too_long` | Hand-rolled | Reject (cost guard) |
+| Retrieval | `low_similarity` | Hand-rolled (threshold 0.5) | Continue, flag "no good sources" |
+| Retrieval | `empty_retrieval` | Hand-rolled | Refuse to answer |
+| Output | `hallucination` | Hand-rolled (RAGAS faithfulness < 0.7) | Show ⚠️ to user |
+| Output | `refused_but_should_answer` | Hand-rolled | Flag for admin |
+| Output | `pii_in_answer` | Hand-rolled (regex) | Block answer, fallback |
+| Output | `excessive_cost` | Hand-rolled (per-request threshold) | Flag for admin |
+
+All trigger reasons are shown in full to every user (option C — maximum transparency).
+
+### Feature scope by role
+
+| Feature | Users | Admin |
+|---|---|---|
+| Own question + answer history | ✅ | ✅ all users |
+| Retrieved vs. used-in-prompt distinction | ✅ | ✅ |
+| Replay past question with different prompt version | ✅ | ✅ |
+| Thumbs up/down + optional comment | ✅ | ✅ |
+| Full guardrail trigger reasons | ✅ | ✅ |
+| Cost meter ($-spent today/week/month) | ❌ | ✅ |
+| Latency breakdown per span | ❌ | ✅ |
+| Bad Answers dashboard | ❌ | ✅ |
+| Flag-rules dashboard | ❌ | ✅ |
+| Per-user analytics | ❌ | ✅ |
+
 ## Full tech stack
 
 ### Storage
@@ -35,9 +141,8 @@ This is an **observability project**, not a RAG project. The RAG pipeline is the
 | Span storage | TBD (Postgres vs Tempo / Jaeger / ClickHouse) | 4 | **Deferred decision** |
 
 ### Embedding model
-- **Decision open before Phase 2.**
-- Tentative pick: OpenAI `text-embedding-3-small` ($0.02 / 1M tokens, hosted).
-- Alternative: local `sentence-transformers` (free, model download ~80-500MB).
+- **Locked 2026-05-14:** OpenAI `text-embedding-3-small` ($0.02 / 1M tokens, hosted).
+- Rationale: corpus is tiny (~2.25M tokens → ~$0.05 to embed), one API key covers embedding + Phase 3 LLM, and local `sentence-transformers` would add an 80-500MB model dependency without saving real money.
 
 ### LLM
 - **Decision open at Phase 3.**
@@ -81,10 +186,11 @@ This is an **observability project**, not a RAG project. The RAG pipeline is the
 
 | # | Decision | Phase | Notes |
 |---|---|---|---|
-| 1 | Embedding model | Before 2 | OpenAI hosted vs local sentence-transformers |
-| 2 | LLM provider + model | 3 | OpenAI gpt-4o-mini vs Anthropic claude-haiku-4-5 |
-| 3 | RAG framework | 3 | LangChain vs hand-rolled (concern: OTel tracing cleanliness) |
-| 4 | Span storage backend | 4 | Postgres vs Tempo/Jaeger/ClickHouse (concern: convention) |
+| 1 | LLM provider + model | 3 | OpenAI gpt-4o-mini vs Anthropic claude-haiku-4-5 |
+| 2 | RAG framework | 3 | LangChain vs hand-rolled (concern: OTel tracing cleanliness) |
+| 3 | Span storage backend | 4 | Postgres vs Tempo/Jaeger/ClickHouse (concern: convention) |
+
+**Resolved:** Embedding model (OpenAI `text-embedding-3-small`, locked 2026-05-14).
 
 ## Deployment options
 
@@ -133,7 +239,7 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 | 1 | Data collection (Ergast/Jolpica, Wikipedia, FIA PDFs) | Done (2026-05-11) |
 | 2 | Chunking, embedding, indexing (Chroma) | **Next** |
 | 3 | Basic RAG pipeline (deliberately not over-engineered) | Pending |
-| 4 | Observability layer (the product — largest phase) | Pending |
+| 4 | Observability layer (architecture locked 2026-05-14 — see "Observability architecture" section) | Pending |
 | 5 | Feedback loop demo (pick 3 real failures, fix, document before/after) | Pending |
 
 ### Phase 1 final corpus
