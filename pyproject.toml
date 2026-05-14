@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["ingestion"]
+packages = ["ingestion", "rag"]
 
 [tool.ruff]
 line-length = 100
