@@ -261,8 +261,8 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 | 0 | Scope lock | Done (2026-05-10) |
 | 1 | Data collection (Ergast/Jolpica, Wikipedia, FIA PDFs) | Done (2026-05-11) |
 | 2 | Chunking, embedding, indexing (Chroma) | Done (2026-05-14) |
-| 3 | Basic RAG pipeline + Ergast SQL pipeline + query router (deliberately not over-engineered) | **Next** |
-| 4 | Observability layer (architecture locked 2026-05-14 — see "Observability architecture" section) | Pending |
+| 3 | Basic RAG pipeline + Ergast SQL pipeline + query router (deliberately not over-engineered) | Done (2026-05-14) |
+| 4 | Observability layer (architecture locked 2026-05-14 — see "Observability architecture" section) | **Next** |
 | 5 | Feedback loop demo (pick 3 real failures, fix, document before/after) | Pending |
 
 ### Phase 1 final corpus
@@ -282,6 +282,26 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 - **2,020,170 tokens embedded** at total cost **$0.0404** (within projection)
 - All chunks carry provenance metadata (`chunk_id`, `source_file_path`, `char_start`/`char_end`, `page_number` for FIA) ready for Phase 4 dashboard UI
 - Smoke test verified: retrieval pulls semantically-correct chunks for both narrative ("Who won 2023 Bahrain GP?" → 2023 Bahrain article #1 at 0.72) and FIA-regulation queries (TPC procedure → 2020 Sporting Regs page 7 at 0.66)
+
+### Phase 3 final state
+
+- **Ergast SQLite database** at `data/db/ergast.sqlite` (780 KB) — 9 normalized tables, 6,077 rows total, read-only mode at query time.
+- **`rag/` runtime package** — hand-rolled, no LangChain. Six modules:
+  - `retriever.py` (Chroma + OpenAI embedding wrapper)
+  - `llm.py` (OpenAI chat completions; plain text + strict JSON schema)
+  - `prompts.py` (router / RAG synthesis / SQL gen / answer merger templates)
+  - `router.py` (LLM classifier: structured / narrative / both)
+  - `sql_pipeline.py` (LLM SQL gen + read-only execution)
+  - `rag_pipeline.py` (narrative retrieval + synthesis)
+  - `merger.py` (combine paths into final prose answer)
+  - `ask.py` (top-level orchestrator)
+- **`scripts/ask.py` CLI** — end-to-end Q&A with `--verbose` for full provenance display.
+- **Smoke test verified** all three routes:
+  - Narrative: "Who is Lando Norris?" → grounded bio citing 2 chunks
+  - Structured: "Verstappen 2023 wins?" → SQL `driver_standings.wins` → 19
+  - Both: "2021 Abu Dhabi + championship end?" → SQL refused (handled gracefully), RAG synthesized full narrative
+- **Validated pivot question**: "Verstappen wins at Monaco 2020-2025" → SQL returns 2 (the question RAG couldn't reliably answer; routing architecture vindicated)
+- **API spend Phase 3:** $0 (free OpenAI tokens). Lifetime total still $0.0404.
 
 ## Principles / rules
 
