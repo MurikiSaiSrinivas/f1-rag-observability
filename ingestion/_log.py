@@ -25,6 +25,11 @@ def configure_embed_logger(source: str) -> Path:
     return _configure_phase_logger("embed", source)
 
 
+def configure_index_logger(source: str) -> Path:
+    """Configure `ingestion.index.{source}` logger. Returns log file path."""
+    return _configure_phase_logger("index", source)
+
+
 def _configure_phase_logger(phase: str, source: str) -> Path:
     """Configure `ingestion.{phase}.{source}` logger with a fresh per-run log file.
 
