@@ -27,6 +27,7 @@ from ingestion.chunk._common import (
     count_tokens,
     existing_chunk_ids,
     normalize_path,
+    sliding_chunks,
 )
 
 SOURCE = "wikipedia"
@@ -103,73 +104,6 @@ def _find_boilerplate_start(text: str) -> int:
     return earliest
 
 
-def _find_break(text: str, target_pos: int) -> int:
-    """Find a clean break point at or before target_pos.
-
-    Prefers paragraph break ('\\n\\n') > sentence end ('. '). Falls back to hard
-    cut at target_pos. Search window: BREAK_SEARCH_RADIUS chars before target.
-    Returns the position AFTER the break (i.e., where the next chunk would start).
-    """
-    lo = max(0, target_pos - BREAK_SEARCH_RADIUS)
-
-    para = text.rfind("\n\n", lo, target_pos)
-    if para >= 0:
-        return para + 2
-
-    sent = text.rfind(". ", lo, target_pos)
-    if sent >= 0:
-        return sent + 2
-
-    return target_pos
-
-
-def _chunk_with_offsets(text: str, end_pos: int):
-    """Yield (chunk_text, char_start, char_end) tuples.
-
-    Chunks text[0:end_pos] into ~CHUNK_TARGET_CHARS windows with OVERLAP_CHARS
-    overlap. Offsets point into `text` and reflect the chunk's leading/trailing
-    whitespace removed (after .strip()).
-    """
-    if end_pos <= 0:
-        return
-
-    if end_pos <= CHUNK_TARGET_CHARS:
-        stripped = text[:end_pos].strip()
-        if len(stripped) >= MIN_CHUNK_CHARS:
-            offset = text[:end_pos].index(stripped)
-            yield stripped, offset, offset + len(stripped)
-        return
-
-    pos = 0
-    while pos < end_pos:
-        target_end = min(pos + CHUNK_TARGET_CHARS, end_pos)
-
-        if target_end >= end_pos:
-            chunk_end = end_pos
-        else:
-            chunk_end = _find_break(text, target_end)
-            # If the break was so close to the start that the chunk would be tiny,
-            # fall back to a hard cut at the target.
-            if chunk_end <= pos + MIN_CHUNK_CHARS:
-                chunk_end = target_end
-
-        raw = text[pos:chunk_end]
-        stripped = raw.strip()
-        if len(stripped) >= MIN_CHUNK_CHARS:
-            offset_in_raw = raw.index(stripped)
-            actual_start = pos + offset_in_raw
-            actual_end = actual_start + len(stripped)
-            yield stripped, actual_start, actual_end
-
-        if chunk_end >= end_pos:
-            break
-
-        next_pos = chunk_end - OVERLAP_CHARS
-        if next_pos <= pos:
-            next_pos = chunk_end  # safety: never go backward
-        pos = next_pos
-
-
 def chunk_one_file(
     txt_path: Path,
     meta: dict,
@@ -193,7 +127,14 @@ def chunk_one_file(
     written = 0
     skipped = 0
     for idx, (chunk_text, start, end) in enumerate(
-        _chunk_with_offsets(text, boilerplate_start)
+        sliding_chunks(
+            text,
+            boilerplate_start,
+            target_chars=CHUNK_TARGET_CHARS,
+            overlap_chars=OVERLAP_CHARS,
+            min_chars=MIN_CHUNK_CHARS,
+            break_search_radius=BREAK_SEARCH_RADIUS,
+        )
     ):
         chunk_id = f"{SOURCE}/{category}/{slug}#{idx:04d}"
         if chunk_id in existing_ids:
