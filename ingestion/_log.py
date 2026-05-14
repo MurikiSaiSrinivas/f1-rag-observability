@@ -1,4 +1,4 @@
-"""Logging helper for ingestion collectors — writes per-run logs to logs/."""
+"""Logging helper for ingestion pipelines — writes per-run logs to logs/."""
 
 from __future__ import annotations
 
@@ -11,17 +11,26 @@ LOG_DIR = Path("logs")
 
 
 def configure_collector_logger(source: str) -> Path:
-    """Configure the `ingestion.collect.{source}` logger to write a fresh log file.
+    """Configure `ingestion.collect.{source}` logger. Returns log file path."""
+    return _configure_phase_logger("collect", source)
 
-    Creates a new timestamped log file in logs/, attaches a file handler (DEBUG)
-    and a stderr handler (WARNING and above). Returns the log file path so the
-    caller can surface it to the user.
+
+def configure_chunk_logger(source: str) -> Path:
+    """Configure `ingestion.chunk.{source}` logger. Returns log file path."""
+    return _configure_phase_logger("chunk", source)
+
+
+def _configure_phase_logger(phase: str, source: str) -> Path:
+    """Configure `ingestion.{phase}.{source}` logger with a fresh per-run log file.
+
+    File handler at DEBUG, stderr handler at WARNING+. Returns the log file path
+    so the caller can surface it to the user.
     """
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log_path = LOG_DIR / f"collect_{source}_{timestamp}.log"
+    log_path = LOG_DIR / f"{phase}_{source}_{timestamp}.log"
 
-    logger = logging.getLogger(f"ingestion.collect.{source}")
+    logger = logging.getLogger(f"ingestion.{phase}.{source}")
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
