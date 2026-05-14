@@ -35,21 +35,41 @@ The full product architecture for the dashboard side of the project. Locked befo
 - **Admin** is a separate role guarded by a hardcoded password in the `ADMIN_PASSWORD` env var; signed cookie after login. Single-tenant — one admin.
 - **Accepted limitations:** cleared cookies → new identity; different devices → different identities. Fine for portfolio scope.
 
+### Query routing & data sources
+
+The system has **two backends for answering questions**, decided per request by a router:
+
+- **Vector RAG** (Wikipedia + FIA chunks in Chroma) — answers narrative/explanatory questions: *"Explain the 2023 sporting regulations"*, *"Who is Lando Norris?"*, *"What happened at the 2021 Abu Dhabi GP?"*
+- **SQL on Ergast** (SQLite) — answers structured-fact questions: *"How many wins did Verstappen have in 2023?"*, *"List all drivers who finished 2nd at Monaco 2020-2025"*
+
+The **query router** (LLM call early in the pipeline) classifies each question into one of three modes:
+
+- `structured` → SQL path only
+- `narrative` → vector RAG path only
+- `both` → both paths execute; an answer-merger LLM call combines results
+
+**Why routed, not unified:** RAG over JSON tables fails on aggregation — the top-K retrieval limit can't surface all rows needed for counting (a corpus with 19 win-records can't be reliably counted by retrieving the top 5). SQL excels at exact counts/filters but is useless for narrative content. Routing each question to the right tool is the production-grade pattern.
+
+**Each path is independently observable** — the dashboard shows the route decision, latency per path, and failure modes specific to each (retrieval misses, SQL generation errors, route misclassifications).
+
 ### Per-request data flow
 
 Each `POST /ask` produces one trace, indexed by `request_id`:
 
 1. **Capture request** — `request_id`, `client_id`, `session_id`, question, timestamp, model, prompt_version.
 2. **Input guardrails** — off-topic, prompt-injection, PII detection, length checks. May abort.
-3. **Embed question** — one OpenAI call; record tokens + latency.
-4. **Vector search in Chroma** — top-k chunks with similarity scores.
-5. **Retrieval guardrails** — low-similarity warning, empty-retrieval abort.
-6. **Assemble prompt** — record which retrieved chunks made it into context vs. trimmed (retrieved-vs-used distinction).
-7. **LLM call** — tokens in/out, latency, cost.
-8. **Output guardrails** — hallucination flag, PII-leak block, cost-spike flag.
-9. **Return answer** to user, with the relevant guardrail reasons attached if any triggered.
-10. **Async:** RAGAS scoring (faithfulness, relevance), flag rules.
-11. **User feedback** — thumbs up/down + optional comment, attached to `request_id`.
+3. **Query router** — LLM classifies question as `structured` / `narrative` / `both`; decision + confidence logged as a span.
+4. **(narrative or both) Embed question** — OpenAI call; record tokens + latency.
+5. **(narrative or both) Vector search in Chroma** — top-k chunks with similarity scores.
+6. **(narrative or both) Retrieval guardrails** — low-similarity warning, empty-retrieval abort.
+7. **(structured or both) Generate SQL** — LLM call with Ergast schema prompt → SQL string.
+8. **(structured or both) Execute SQL** — run against `data/db/ergast.sqlite`; capture rows + query.
+9. **Assemble context** — combine retrieved chunks and/or SQL result rows. Record which chunks made it into context vs. trimmed (retrieved-vs-used distinction).
+10. **LLM synthesis** — final answer from combined context; tokens in/out, latency, cost.
+11. **Output guardrails** — hallucination flag, PII-leak block, cost-spike flag.
+12. **Return answer** to user, with the relevant guardrail reasons attached if any triggered.
+13. **Async:** RAGAS scoring (faithfulness, relevance), flag rules.
+14. **User feedback** — thumbs up/down + optional comment, attached to `request_id`.
 
 ### Data model (Phase 4 — Postgres)
 
@@ -62,7 +82,9 @@ Each `POST /ask` produces one trace, indexed by `request_id`:
 | `chunks` | Materialized chunks with provenance metadata (mirror of `data/chunks/chunks.jsonl`) |
 | `spans` | Per-step latency rows for the latency-breakdown view |
 | `scores` | RAGAS metric rows per request |
-| `flags` | Flag-rule outputs |
+| `flags` | Flag-rule outputs (incl. `sql_execution_error`, `sql_zero_results`, `route_misclassified`) |
+| `sql_executions` | Per-request SQL: generated query, row count, execution time, error if any |
+| `route_decisions` | Per-request router output: mode (`structured`/`narrative`/`both`), confidence, reasoning |
 | `guardrails_triggered` | Which guardrails fired per request, with stage, action, severity, reason |
 | `feedback` | Thumbs + comments per request |
 
@@ -87,13 +109,13 @@ Every chunk carries enough metadata to power all observability features downstre
 
 - **Wikipedia chunks:** `source_file_path` is the `.txt`; `char_start`/`char_end` enable exact-text highlighting.
 - **FIA chunks:** `source_file_path` is the **PDF** (not the `.txt`); `page_number` set; chunking runs on the extracted `.txt` but the dashboard renders the PDF.
-- **Ergast chunks:** no `char_start`/`char_end`; `metadata.record_index` instead; chunk text is the synthesized natural-language sentence.
+- **Ergast data:** not chunked — served from a normalized SQLite database (`data/db/ergast.sqlite`) via the SQL pipeline. See "Query routing & data sources" above.
 
 ### Provenance UI
 
-- **Wikipedia chunks:** open the `.txt` in a content panel, highlight `char_start:char_end` in yellow.
-- **FIA chunks:** open the PDF in a PDF.js viewer; navigate to `page_number`; highlight chunk text via PDF.js's text-layer search (no coordinate math — works because regulation PDFs are single-column).
-- **Ergast chunks:** caption "from JSON record X in file Y" + the synthesized sentence; no highlight (synthesized text has no source span).
+- **Wikipedia answers:** open the `.txt` in a content panel, highlight `char_start:char_end` in yellow for each contributing chunk.
+- **FIA answers:** open the PDF in a PDF.js viewer; navigate to `page_number`; highlight chunk text via PDF.js's text-layer search (no coordinate math — works because regulation PDFs are single-column).
+- **Ergast SQL answers:** show the **generated SQL query** + the **rows it returned** (table view). Provenance is the query and the data it pulled, not a highlighted source file.
 
 ### Guardrails
 
@@ -136,7 +158,8 @@ All trigger reasons are shown in full to every user (option C — maximum transp
 | Role | Tool | Phase | Status |
 |---|---|---|---|
 | Raw corpus | Filesystem + JSONL manifest | 1 | Locked |
-| Vector store | Chroma | 2 | Locked |
+| Vector store (Wikipedia + FIA chunks) | Chroma | 2 | Locked |
+| Structured store (Ergast facts) | SQLite (file-based, no server) | 3 | Locked |
 | App DB | Postgres | 4 | Locked |
 | Span storage | TBD (Postgres vs Tempo / Jaeger / ClickHouse) | 4 | **Deferred decision** |
 
@@ -238,7 +261,7 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 | 0 | Scope lock | Done (2026-05-10) |
 | 1 | Data collection (Ergast/Jolpica, Wikipedia, FIA PDFs) | Done (2026-05-11) |
 | 2 | Chunking, embedding, indexing (Chroma) | **Next** |
-| 3 | Basic RAG pipeline (deliberately not over-engineered) | Pending |
+| 3 | Basic RAG pipeline + Ergast SQL pipeline + query router (deliberately not over-engineered) | Pending |
 | 4 | Observability layer (architecture locked 2026-05-14 — see "Observability architecture" section) | Pending |
 | 5 | Feedback loop demo (pick 3 real failures, fix, document before/after) | Pending |
 
