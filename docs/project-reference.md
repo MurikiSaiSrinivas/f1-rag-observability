@@ -168,14 +168,13 @@ All trigger reasons are shown in full to every user (option C — maximum transp
 - Rationale: corpus is tiny (~2.25M tokens → ~$0.05 to embed), one API key covers embedding + Phase 3 LLM, and local `sentence-transformers` would add an 80-500MB model dependency without saving real money.
 
 ### LLM
-- **Decision open at Phase 3.**
-- Tentative pick: OpenAI `gpt-4o-mini` ($0.15 / $0.60 per 1M tokens in/out).
-- Alternative: Anthropic `claude-haiku-4-5` (~$1 / $5 per 1M tokens).
+- **Locked 2026-05-14:** OpenAI `gpt-4o-mini` (synthesis + routing + SQL generation).
+- $0 effective cost under the OpenAI data-sharing-for-tokens program (2.5M tokens/day, mini tier).
+- API-identical to `gpt-4o`, so trivially swappable for one-off comparisons.
 
 ### RAG framework
-- **Deferred decision at Phase 3.**
-- Tentative: LangChain.
-- Alternative: hand-rolled thin pipeline (LiteLLM or direct SDK + own retriever wrapper). Concern: LangChain's abstractions can fight clean OTel tracing.
+- **Locked 2026-05-14:** Hand-rolled — direct `openai` SDK + Chroma client calls, own prompt templates.
+- Rationale: project thesis is observability over RAG; hand-rolled gives clean OpenTelemetry span control, smallest dep footprint, strongest "I understand RAG from primitives" interview story. Code comments reference equivalent LangChain patterns to show fluency.
 
 ### Backend service
 - **FastAPI** — web framework; exposes `POST /ask` and admin endpoints for the dashboard
@@ -209,11 +208,10 @@ All trigger reasons are shown in full to every user (option C — maximum transp
 
 | # | Decision | Phase | Notes |
 |---|---|---|---|
-| 1 | LLM provider + model | 3 | OpenAI gpt-4o-mini vs Anthropic claude-haiku-4-5 |
-| 2 | RAG framework | 3 | LangChain vs hand-rolled (concern: OTel tracing cleanliness) |
-| 3 | Span storage backend | 4 | Postgres vs Tempo/Jaeger/ClickHouse (concern: convention) |
+| 1 | Span storage backend | 4 | Postgres vs Tempo/Jaeger/ClickHouse (concern: convention) |
+| 2 | Deployment target | 5 | Local-only vs free-tier split (Vercel + Render + Neon) vs single VPS |
 
-**Resolved:** Embedding model (OpenAI `text-embedding-3-small`, locked 2026-05-14).
+**Resolved (2026-05-14):** Embedding model = OpenAI `text-embedding-3-small`. LLM = OpenAI `gpt-4o-mini`. RAG framework = hand-rolled. Ergast SQL schema = 9 normalized tables. Query router = LLM-based classifier with structured-output JSON. See `docs/decisions.md` for full reasoning.
 
 ## Deployment options
 
@@ -238,16 +236,18 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 ## Expected cost
 
 ### API spend (one-time, while building)
-| Phase | Activity | Estimate |
-|---|---|---|
-| 1 | Data collection (free APIs — Ergast, Wikipedia, FIA) | $0 |
-| 2 | Embedding ~5M tokens × $0.02/1M | ~$0.10 |
-| 3 | RAG dev + testing (~500 queries) | ~$0.50 |
-| 4 | Observability dev (~2000 queries incl. RAGAS scoring runs) | ~$6 |
-| 5 | Demo runs | ~$1 |
-| **Total to build everything end-to-end** | | **~$8-15** |
+| Phase | Activity | Original estimate | Actual / projected |
+|---|---|---|---|
+| 1 | Data collection (free APIs) | $0 | **$0** ✓ |
+| 2 | Embedding ~2M tokens × $0.02/1M | ~$0.04 | **$0.0404** ✓ |
+| 3 | RAG + SQL pipeline dev (~500 LLM queries) | ~$1.50 | **$0** (free tokens) |
+| 4 | Observability dev + RAGAS scoring (~2000 queries) | ~$6 | **$0** (free tokens) |
+| 5 | Demo runs (~50 queries) | ~$1 | **$0** (free tokens) |
+| **Total to build everything end-to-end** | | **~$8-15** | **~$0.04** |
 
-**Action item before Phase 2:** Set a **$20/mo hard spend cap** on the OpenAI dashboard. Both OpenAI and Anthropic support this.
+**Free-tokens program (enabled 2026-05-14):** OpenAI's "Share inputs and outputs" + "Share evaluation data" settings grant 2.5M tokens/day on mini models (including `gpt-4o-mini`) and 250K/day on full models — well above our needs. Acceptable for this portfolio project because all data we send is public (Ergast/Wikipedia/FIA) + synthetic test queries; for a real product with user PII this would not be the right call.
+
+**Action item before Phase 2:** Set a **$20/mo hard spend cap** on the OpenAI dashboard as belt-and-suspenders backup in case the free-tokens setting changes.
 
 ### Subscription clarification (important)
 - **Claude Max** and **ChatGPT Plus** are for the chat UIs (claude.ai, Claude Code, chatgpt.com). They do **NOT** include API credits.
@@ -294,6 +294,9 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 
 ## Recommended first picks (subject to revisit at each phase)
 
-- **Embedding:** OpenAI `text-embedding-3-small` (start hosted, switch to local only if it becomes a cost issue — it won't).
-- **LLM:** OpenAI `gpt-4o-mini` (cheapest credible option; one API key covers both embedding and LLM).
+- **Embedding:** OpenAI `text-embedding-3-small` (locked 2026-05-14).
+- **LLM:** OpenAI `gpt-4o-mini` (locked 2026-05-14).
+- **RAG framework:** Hand-rolled (locked 2026-05-14).
+- **Ergast structured data:** SQLite, 9-table relational schema (locked 2026-05-14).
+- **Query router:** LLM-based classifier (locked 2026-05-14).
 - **Deployment target at Phase 5:** Option B (free-tier split) — Vercel + Render + Neon.

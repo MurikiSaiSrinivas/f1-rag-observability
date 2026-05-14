@@ -6,6 +6,48 @@ Chronological record of design decisions for the F1 RAG Observability project, i
 
 ---
 
+## Phase 3 — Routed RAG + SQL pipeline (2026-05-14)
+
+### D3.4 — Query router implementation
+**Status:** ✅ Accepted
+**Decision:** LLM-based classifier with structured-output JSON: `{category: "structured" | "narrative" | "both", confidence: 0.0-1.0, reasoning: str}`. Runs once per request before retrieval, using `gpt-4o-mini`.
+**Considered but scratched:**
+- ❌ Rule-based (keyword/regex matching) — brittle to phrasing, no observability signal, hard to maintain as categories grow.
+- ❌ Hybrid (rules first, LLM fallback) — adds complexity without clear win.
+
+**Reasoning:** The router decision itself becomes a richly traceable Phase 4 span (confidence + reasoning fields). Misclassifications surface as a flag rule (`route_misclassified`). More observable, which is the project's whole point.
+
+### D3.3 — Ergast SQL schema shape
+**Status:** ✅ Accepted
+**Decision:** 9 normalized tables: `drivers`, `constructors`, `circuits`, `races`, `race_results`, `qualifying_results`, `sprint_results`, `driver_standings`, `constructor_standings`. Natural composite keys (e.g., `(season, round)` for races, `(season, round, driver_id)` for results). Both `position` (INTEGER, NULL on DNF) and `position_text` (TEXT, Ergast literal) preserved. `status` as free text for queries like `WHERE status = 'Engine'`. Foreign keys enabled. Read-only mode at query time (`mode=ro`) to harden against LLM-hallucinated DDL/DML.
+**Considered but scratched:**
+- ❌ JSON-column dump (one table with JSON content column) — easier to load, but reads worse in interviews and forces SQL generator to know JSON path syntax.
+- ❌ Surrogate INTEGER primary keys — natural keys debug better in queries, no extra JOINs to look up.
+- ❌ Status lookup table — overkill for 6 seasons; free-text gives richer LLM-generated queries.
+
+**Reasoning:** Standard normalization gives the SQL generator a clean schema to reason over. Demonstrates DB design skill for interviews.
+
+### D3.2 — RAG framework
+**Status:** ✅ Accepted
+**Decision:** Hand-rolled — direct `openai.chat.completions.create` calls, direct Chroma `collection.query` calls, our own f-string prompt templates, our own pipeline orchestration. No LangChain or LlamaIndex.
+**Considered but scratched:**
+- ❌ LangChain — abstraction layers (callbacks, chains, runnables) fight clean OpenTelemetry span hierarchy; version churn breaks code; dep bloat.
+- ❌ LlamaIndex — same downsides as LangChain.
+
+**Reasoning:** Project's thesis is observability over RAG. Hand-rolled gives clean trace control over every step. Stronger interview signal ("here's exactly what my pipeline does, step by step") than wiring a framework. Code comments will reference equivalent LangChain patterns to show fluency without paying the dependency cost.
+
+### D3.1 — LLM provider + model
+**Status:** ✅ Accepted
+**Decision:** OpenAI `gpt-4o-mini` for synthesis + routing + SQL generation. Effectively $0 cost under the OpenAI data-sharing-for-tokens program (2.5M tokens/day, mini tier — comfortably covers our entire Phase 3-5 needs).
+**Considered but scratched:**
+- ❌ OpenAI `gpt-4o` — also free (250K/day) but tends to over-correct; produces fewer "interesting" failures for the dashboard to surface.
+- ❌ `gpt-5` family — newer, less battle-tested; fewer interview reference points.
+- ❌ Anthropic `claude-haiku-4-5` — no free tier; Claude Max plan doesn't cover API; we'd pay $1/$5 per 1M tokens.
+
+**Reasoning:** Production-realistic, fast, well-documented. Mini = sweet spot for failure-mode variety. API is identical to gpt-4o, so easy to swap per-request for one-off comparisons later.
+
+---
+
 ## Phase 2 — Chunking, embedding, indexing (2026-05-14)
 
 ### D2.11 — Wikipedia chunker design
@@ -265,12 +307,10 @@ Chronological record of design decisions for the F1 RAG Observability project, i
 
 | ID | Decision | Phase | Tentative pick |
 |---|---|---|---|
-| 🕒 P3.A | LLM provider + model | 3 | OpenAI `gpt-4o-mini` (cheapest credible; same API key as embedding) vs Anthropic `claude-haiku-4-5` |
-| 🕒 P3.B | RAG framework | 3 | LangChain vs hand-rolled (concern: LangChain's abstractions can fight clean OpenTelemetry tracing) |
-| 🕒 P3.C | Ergast SQL schema shape | 3 | Proper relational (9 normalized tables, recommended) vs JSON-column dump |
-| 🕒 P3.D | Query router implementation | 3 | LLM-based classifier vs rule-based vs hybrid |
 | 🕒 P4.A | Span storage backend | 4 | Postgres vs Tempo / Jaeger / ClickHouse (concern: convention for production observability stacks) |
 | 🕒 P5.A | Deployment target | 5 | Local-only vs free-tier split (Vercel + Render + Neon, recommended) vs single VPS |
+
+**Resolved this session (2026-05-14):** D3.1 (LLM = gpt-4o-mini), D3.2 (RAG framework = hand-rolled), D3.3 (SQL schema = 9 relational tables), D3.4 (query router = LLM classifier).
 
 ---
 
