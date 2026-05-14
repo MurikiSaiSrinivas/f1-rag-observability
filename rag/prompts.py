@@ -111,7 +111,17 @@ IMPORTANT NOTES:
 - constructor_id is a slug: 'red_bull', 'mercedes', 'ferrari', 'mclaren', etc.
 - circuit_id is a slug: 'monaco', 'bahrain', 'silverstone', 'spa', 'monza', etc.
 - position is NULL when a driver retired; position_text is the literal ("1", "R", "D", "W"). Use position = 1 for race winners.
-- status is free text: 'Finished', '+1 Lap', '+2 Laps', 'Accident', 'Engine', 'Brakes', 'Hydraulics', 'Collision', etc.
+- status is free text. Most-common values in this dataset (2020-2025):
+  - "Finished" (normal finish, on the lead lap)
+  - "Lapped" (2023+ format) or "+1 Lap" / "+2 Laps" / "+3 Laps" (older format) for lapped finishers
+  - "Retired" (2023+ catch-all for DNF, no specific cause given)
+  - Specific failures (rarer): "Engine", "Power Unit", "Gearbox", "Brakes", "Hydraulics", "Suspension", "Electronics", "Transmission", "Fuel pressure", "Wheel"
+  - Crashes: "Collision", "Accident", "Collision damage", "Spun off"
+  - Procedural: "Disqualified", "Did not start", "Withdrew"
+- For "all DNFs", use `status NOT IN ('Finished', 'Lapped') AND status NOT LIKE '+%'` — this captures both formats.
+- For specific failure types, prefer OR conditions: e.g., `status IN ('Engine', 'Power Unit')` for engine failures.
+- driver_standings.wins is the **end-of-season win count** (integer); use it for "how many wins" questions instead of COUNT(*) over race_results when you want the canonical Ergast number.
+- For per-season race counts (e.g., "how many races did X win in 2023"), use `SELECT wins FROM driver_standings WHERE driver_id=? AND season=?` or `SELECT COUNT(*) FROM race_results WHERE driver_id=? AND season=? AND position=1` — both should agree.
 - Data covers seasons 2020-2025.
 - driver_standings / constructor_standings hold end-of-season totals (precomputed by Ergast, accounts for half-points etc.).
 """
