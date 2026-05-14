@@ -260,8 +260,8 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 |---|---|---|
 | 0 | Scope lock | Done (2026-05-10) |
 | 1 | Data collection (Ergast/Jolpica, Wikipedia, FIA PDFs) | Done (2026-05-11) |
-| 2 | Chunking, embedding, indexing (Chroma) | **Next** |
-| 3 | Basic RAG pipeline + Ergast SQL pipeline + query router (deliberately not over-engineered) | Pending |
+| 2 | Chunking, embedding, indexing (Chroma) | Done (2026-05-14) |
+| 3 | Basic RAG pipeline + Ergast SQL pipeline + query router (deliberately not over-engineered) | **Next** |
 | 4 | Observability layer (architecture locked 2026-05-14 — see "Observability architecture" section) | Pending |
 | 5 | Feedback loop demo (pick 3 real failures, fix, document before/after) | Pending |
 
@@ -273,6 +273,15 @@ DigitalOcean / Hetzner box running everything in Docker. More "real ops" feel; s
 - **FIA regulations**: 12 PDFs extracted to text (sporting + technical × 6 seasons), ~4.5M chars
 - ~8M chars of natural-language corpus + structured JSON to enrich it
 - All cataloged in `data/manifest.jsonl` (one row per source document)
+
+### Phase 2 final state
+
+- **4,587 chunks** in `data/chunks/chunks.jsonl` (2,132 Wikipedia + 2,455 FIA; no Ergast — moved to SQL pipeline at Phase 3 per D2.9)
+- **4,587 embeddings** in `data/chunks/embeddings.jsonl` (~136 MB; 1,536-dim, OpenAI `text-embedding-3-small`)
+- **Persistent Chroma collection** `f1_corpus` at `data/index/chroma/` (cosine similarity, HNSW)
+- **2,020,170 tokens embedded** at total cost **$0.0404** (within projection)
+- All chunks carry provenance metadata (`chunk_id`, `source_file_path`, `char_start`/`char_end`, `page_number` for FIA) ready for Phase 4 dashboard UI
+- Smoke test verified: retrieval pulls semantically-correct chunks for both narrative ("Who won 2023 Bahrain GP?" → 2023 Bahrain article #1 at 0.72) and FIA-regulation queries (TPC procedure → 2020 Sporting Regs page 7 at 0.66)
 
 ## Principles / rules
 
