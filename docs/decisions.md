@@ -6,6 +6,20 @@ Chronological record of design decisions for the F1 RAG Observability project, i
 
 ---
 
+## Phase 4 — Observability layer (2026-05-17)
+
+### D4.1 — Span storage backend
+**Status:** ✅ Accepted
+**Decision:** Emit genuine OpenTelemetry spans, but persist them in the Postgres `spans` table via a custom span processor. No separate trace backend. (Resolves deferred decision P4.A.)
+**Considered but scratched:**
+- ❌ Jaeger — its built-in trace UI competes with the custom Trace Detail screen, which is the actual deliverable; adds a separate service to run.
+- ❌ Tempo + Grafana — heavier infra; meaningful at scale but overkill for a portfolio dataset of a few thousand requests.
+- ❌ ClickHouse — columnar trace analytics; massive overkill at this scale, adds a columnar DB to operate for no benefit here.
+
+**Reasoning:** The deliverable is a *bespoke* observability UI, not a generic trace explorer — a Jaeger/Tempo trace browser would only duplicate the dashboard we hand-build. Postgres-only keeps infra to one container and the latency screens become plain SQL. OpenTelemetry instrumentation is still real (interview-credible); swapping to an OTLP collector → Tempo later is a config change, noted in code. Consistent with the hand-rolled thesis (D3.2).
+
+---
+
 ## Phase 3 — Routed RAG + SQL pipeline (2026-05-14)
 
 ### D3.4 — Query router implementation
@@ -307,10 +321,10 @@ Chronological record of design decisions for the F1 RAG Observability project, i
 
 | ID | Decision | Phase | Tentative pick |
 |---|---|---|---|
-| 🕒 P4.A | Span storage backend | 4 | Postgres vs Tempo / Jaeger / ClickHouse (concern: convention for production observability stacks) |
 | 🕒 P5.A | Deployment target | 5 | Local-only vs free-tier split (Vercel + Render + Neon, recommended) vs single VPS |
 
-**Resolved this session (2026-05-14):** D3.1 (LLM = gpt-4o-mini), D3.2 (RAG framework = hand-rolled), D3.3 (SQL schema = 9 relational tables), D3.4 (query router = LLM classifier).
+**Resolved 2026-05-17:** P4.A → D4.1 (span storage = Postgres `spans` table; OTel still emitted, custom processor persists to Postgres).
+**Resolved 2026-05-14:** D3.1 (LLM = gpt-4o-mini), D3.2 (RAG framework = hand-rolled), D3.3 (SQL schema = 9 relational tables), D3.4 (query router = LLM classifier).
 
 ---
 
