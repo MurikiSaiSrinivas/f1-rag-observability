@@ -237,6 +237,7 @@ export interface AnswerRetrieved {
   used_in_prompt: boolean;
   title: string;
   source: SourceKind;
+  text: string; // the chunk's own text — inspectable even when trimmed
 }
 
 export interface AnswerView {

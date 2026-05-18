@@ -685,6 +685,7 @@ const RETRIEVED_NARRATIVE = [
     used_in_prompt: true,
     title: "Lando Norris",
     source: "wikipedia" as const,
+    text: "Born on 13 November 1999 in Bristol, England, Norris won the 2017 FIA Formula 3 European Championship and finished runner-up in the 2018 FIA Formula 2 Championship before graduating to Formula One.",
   },
   {
     chunk_id: "wikipedia/people/lando_norris#0011",
@@ -693,6 +694,7 @@ const RETRIEVED_NARRATIVE = [
     used_in_prompt: true,
     title: "Lando Norris",
     source: "wikipedia" as const,
+    text: "Norris took his maiden Formula One victory at the 2024 Miami Grand Prix, his 110th start, and has since established himself as a consistent front-runner and a title contender.",
   },
   {
     chunk_id: "wikipedia/people/lando_norris#0002",
@@ -701,6 +703,7 @@ const RETRIEVED_NARRATIVE = [
     used_in_prompt: true,
     title: "Lando Norris",
     source: "wikipedia" as const,
+    text: "Lando Norris is a British racing driver currently competing in Formula One for McLaren. He made his Formula One debut with McLaren in 2019.",
   },
   {
     chunk_id: "wikipedia/teams/mclaren#0044",
@@ -709,6 +712,7 @@ const RETRIEVED_NARRATIVE = [
     used_in_prompt: false,
     title: "McLaren",
     source: "wikipedia" as const,
+    text: "McLaren Racing is a British motor racing team based in Woking, England. In recent seasons it has run Mercedes power units and fielded Lando Norris alongside Oscar Piastri.",
   },
   {
     chunk_id: "fia/2024/sporting_regulations#p012-03",
@@ -717,6 +721,7 @@ const RETRIEVED_NARRATIVE = [
     used_in_prompt: false,
     title: "2024 FIA Formula One Sporting Regulations",
     source: "fia" as const,
+    text: "Article 12 — Each driver must hold a valid FIA Super Licence. Championship points are awarded to the top ten classified finishers on a 25–18–15–12–10–8–6–4–2–1 scale.",
   },
 ];
 
@@ -728,6 +733,7 @@ const RETRIEVED_BOTH = [
     used_in_prompt: true,
     title: "2021 Abu Dhabi Grand Prix",
     source: "wikipedia" as const,
+    text: "Lewis Hamilton led for most of the race, but a late safety car — deployed after Nicholas Latifi's crash — bunched the field together.",
   },
   {
     chunk_id: "wikipedia/races/2021_abu_dhabi_grand_prix#0008",
@@ -736,6 +742,7 @@ const RETRIEVED_BOTH = [
     used_in_prompt: true,
     title: "2021 Abu Dhabi Grand Prix",
     source: "wikipedia" as const,
+    text: "On the final lap, Max Verstappen, on fresh soft tyres, overtook Hamilton to win the race and clinch his first World Drivers' Championship.",
   },
   {
     chunk_id: "wikipedia/seasons/2021_formula_one#0033",
@@ -744,6 +751,7 @@ const RETRIEVED_BOTH = [
     used_in_prompt: false,
     title: "2021 Formula One World Championship",
     source: "wikipedia" as const,
+    text: "The 2021 season was contested over 22 rounds. The title fight between Hamilton and Verstappen went to the final race in Abu Dhabi, decided on the last lap.",
   },
 ];
 
@@ -845,6 +853,7 @@ export function mockAnswerView(requestId: string): AnswerView {
         used_in_prompt: true,
         title: "Formula One",
         source: "wikipedia",
+        text: "Formula One is the highest class of international single-seater open-wheel motor racing, sanctioned by the FIA and contested since 1950 across a worldwide series of Grands Prix.",
       },
     ],
     source: GENERIC_DOC,

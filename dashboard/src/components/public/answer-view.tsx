@@ -55,6 +55,7 @@ function HighlightedText({
 
 function SourceReader({ a }: { a: AnswerViewT }) {
   const [showUnused, setShowUnused] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   const src = a.source;
   if (!src)
     return (
@@ -111,41 +112,75 @@ function SourceReader({ a }: { a: AnswerViewT }) {
           {showUnused ? "hide" : "show"} retrieved-but-unused chunks
         </button>
         <div className="overflow-hidden rounded-md border border-border">
-          {chunks.map((c) => (
-            <div
-              key={c.chunk_id}
-              className={cn(
-                "flex items-center gap-3 border-b border-border px-3 py-1.5 last:border-0",
-                !c.used_in_prompt && "opacity-50",
-              )}
-            >
-              <span className="w-5 text-center font-mono text-[11px] text-muted-foreground">
-                {c.rank}
-              </span>
-              <span
-                className={cn(
-                  "w-10 text-right font-mono text-[11px] tabular",
-                  c.similarity >= 0.5 ? "text-success" : "text-warning",
-                )}
+          {chunks.map((c) => {
+            const isOpen = open === c.chunk_id;
+            return (
+              <div
+                key={c.chunk_id}
+                className="border-b border-border last:border-0"
               >
-                {c.similarity.toFixed(2)}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-xs">
-                {c.title}
-              </span>
-              <span className="label-micro tracking-wide">{c.source}</span>
-              <span
-                className={cn(
-                  "rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase",
-                  c.used_in_prompt
-                    ? "bg-success/15 text-success"
-                    : "bg-muted text-muted-foreground",
+                <button
+                  type="button"
+                  onClick={() => setOpen(isOpen ? null : c.chunk_id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors hover:bg-background/40",
+                    !c.used_in_prompt && !isOpen && "opacity-50",
+                  )}
+                >
+                  <ChevronDown
+                    className={cn(
+                      "size-3 shrink-0 text-muted-foreground transition-transform",
+                      isOpen && "rotate-180",
+                    )}
+                  />
+                  <span className="w-5 text-center font-mono text-[11px] text-muted-foreground">
+                    {c.rank}
+                  </span>
+                  <span
+                    className={cn(
+                      "w-10 text-right font-mono text-[11px] tabular",
+                      c.similarity >= 0.5 ? "text-success" : "text-warning",
+                    )}
+                  >
+                    {c.similarity.toFixed(2)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs">
+                    {c.title}
+                  </span>
+                  <span className="label-micro tracking-wide">{c.source}</span>
+                  <span
+                    className={cn(
+                      "rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase",
+                      c.used_in_prompt
+                        ? "bg-success/15 text-success"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {c.used_in_prompt ? "used" : "trimmed"}
+                  </span>
+                </button>
+                {isOpen && (
+                  <div className="space-y-2 border-t border-border bg-background/40 px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="label-micro truncate">
+                        {c.chunk_id}
+                      </span>
+                      {c.used_in_prompt ? (
+                        <span className="shrink-0 font-mono text-[10px] text-success">
+                          ▲ highlighted above
+                        </span>
+                      ) : (
+                        <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                          retrieved · not sent to the model
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm leading-6">{c.text}</p>
+                  </div>
                 )}
-              >
-                {c.used_in_prompt ? "used" : "trimmed"}
-              </span>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
