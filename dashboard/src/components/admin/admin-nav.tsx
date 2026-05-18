@@ -8,6 +8,7 @@ import {
   Gauge,
   LayoutDashboard,
   ListTree,
+  Repeat,
   ShieldAlert,
   Timer,
   Users,
@@ -24,6 +25,7 @@ const NAV = [
   { label: "Flags / Bad Answers", href: "/admin/flags", icon: Flag },
   { label: "Guardrails", href: "/admin/guardrails", icon: ShieldAlert },
   { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Feedback loop", href: "/admin/feedback-loop", icon: Repeat },
 ];
 
 export function AdminNav() {
