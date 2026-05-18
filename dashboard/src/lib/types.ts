@@ -260,3 +260,130 @@ export interface AskResult {
   request_id: string;
   route: Route;
 }
+
+/* ---------- Admin analytics screens ---------- */
+
+export interface LatencyView {
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  trend: { t: string; p50: number; p95: number; p99: number }[];
+  by_span: { span_type: SpanType; avg_ms: number; pct: number }[];
+  slowest: {
+    request_id: string;
+    question: string;
+    latency_ms: number;
+    dominant_span: string;
+    route: Route;
+  }[];
+}
+
+export interface CostView {
+  today_usd: number;
+  week_usd: number;
+  month_usd: number;
+  cumulative: { t: string; usd: number }[];
+  by_model: { model: string; usd: number }[];
+  by_route: { route: Route; usd: number }[];
+  by_operation: { operation: string; usd: number }[];
+  tokens: {
+    day: string;
+    prompt: number;
+    completion: number;
+    total: number;
+  }[];
+  per_request: { bucket: string; count: number }[];
+  threshold_usd: number;
+}
+
+export interface QualityView {
+  distributions: {
+    metric: string;
+    mean: number;
+    buckets: { range: string; count: number }[];
+  }[];
+  trend: { t: string; faithfulness: number; answer_relevancy: number }[];
+  prompt_markers: { t: string; version: string }[];
+  scatter: { faithfulness: number; feedback: "up" | "down" | null }[];
+  lowest: { request_id: string; question: string; faithfulness: number }[];
+}
+
+export interface FlagsView {
+  rules: {
+    flag_name: string;
+    description: string;
+    severity: Severity;
+    count: number;
+    trend: number[];
+  }[];
+  flagged: (TraceRow & { flag_reason: string })[];
+}
+
+export interface GuardrailsView {
+  rules: {
+    rule_name: string;
+    stage: GuardrailStage;
+    implementation: "hand_rolled" | "guardrails_ai";
+    action: GuardrailAction;
+    severity: Severity;
+    count: number;
+    trend: number[];
+  }[];
+  by_stage: { t: string; input: number; retrieval: number; output: number }[];
+}
+
+export interface UserRow {
+  client_id: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  request_count: number;
+  route_mix: { narrative: number; structured: number; both: number };
+  avg_faithfulness: number | null;
+  feedback_ratio: number;
+  total_cost_usd: number;
+  flagged_count: number;
+}
+
+export interface UserDetail {
+  client: UserRow;
+  history: TraceRow[];
+}
+
+export interface FeedbackLoopCase {
+  id: string;
+  title: string;
+  question: string;
+  change_note: string;
+  fix_commit: string;
+  before: {
+    answer: string;
+    faithfulness: number;
+    flags: string[];
+    latency_ms: number;
+    cost_usd: number;
+  };
+  after: {
+    answer: string;
+    faithfulness: number;
+    flags: string[];
+    latency_ms: number;
+    cost_usd: number;
+  };
+  timeline: { t: string; faithfulness: number }[];
+}
+
+export interface ReplayRun {
+  prompt_version: string;
+  answer: string;
+  route: Route;
+  latency_ms: number;
+  total_tokens: number;
+  faithfulness: number | null;
+}
+
+export interface ReplayComparison {
+  request_id: string;
+  question: string;
+  original: ReplayRun;
+  replay: ReplayRun;
+}

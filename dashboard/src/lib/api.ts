@@ -7,19 +7,37 @@
  */
 import {
   askMock,
+  MOCK_COST,
+  MOCK_FEEDBACK_LOOP,
+  MOCK_FLAGS,
+  MOCK_GUARDRAILS,
   MOCK_HISTORY,
+  MOCK_LATENCY,
   MOCK_OVERVIEW,
+  MOCK_QUALITY,
   MOCK_TRACES,
+  MOCK_USERS,
   mockAnswerView,
+  mockReplay,
   mockTraceDetail,
+  mockUserDetail,
 } from "@/lib/mock";
 import type {
   AdminOverview,
   AnswerView,
   AskResult,
+  CostView,
+  FeedbackLoopCase,
+  FlagsView,
+  GuardrailsView,
   HistoryItem,
+  LatencyView,
+  QualityView,
+  ReplayComparison,
   TraceDetail,
   TraceRow,
+  UserDetail,
+  UserRow,
 } from "@/lib/types";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_API_BASE ? false : true;
@@ -66,6 +84,41 @@ export const api = {
       ? delay(mockAnswerView(id))
       : get<AnswerView>(`/requests/${id}`);
   },
+  getLatency(): Promise<LatencyView> {
+    return USE_MOCK ? delay(MOCK_LATENCY) : get<LatencyView>("/admin/latency");
+  },
+  getCost(): Promise<CostView> {
+    return USE_MOCK ? delay(MOCK_COST) : get<CostView>("/admin/cost");
+  },
+  getQuality(): Promise<QualityView> {
+    return USE_MOCK ? delay(MOCK_QUALITY) : get<QualityView>("/admin/quality");
+  },
+  getFlags(): Promise<FlagsView> {
+    return USE_MOCK ? delay(MOCK_FLAGS) : get<FlagsView>("/admin/flags");
+  },
+  getGuardrails(): Promise<GuardrailsView> {
+    return USE_MOCK
+      ? delay(MOCK_GUARDRAILS)
+      : get<GuardrailsView>("/admin/guardrails");
+  },
+  getUsers(): Promise<UserRow[]> {
+    return USE_MOCK ? delay(MOCK_USERS) : get<UserRow[]>("/admin/users");
+  },
+  getUser(id: string): Promise<UserDetail> {
+    return USE_MOCK
+      ? delay(mockUserDetail(id))
+      : get<UserDetail>(`/admin/users/${id}`);
+  },
+  getFeedbackLoop(): Promise<FeedbackLoopCase[]> {
+    return USE_MOCK
+      ? delay(MOCK_FEEDBACK_LOOP)
+      : get<FeedbackLoopCase[]>("/admin/feedback-loop");
+  },
+  getReplay(id: string): Promise<ReplayComparison> {
+    return USE_MOCK
+      ? delay(mockReplay(id), 700)
+      : get<ReplayComparison>(`/replay/${id}`);
+  },
 };
 
 export const queryKeys = {
@@ -74,4 +127,13 @@ export const queryKeys = {
   trace: (id: string) => ["trace", id] as const,
   history: ["history"] as const,
   answer: (id: string) => ["answer", id] as const,
+  latency: ["latency"] as const,
+  cost: ["cost"] as const,
+  quality: ["quality"] as const,
+  flags: ["flags"] as const,
+  guardrails: ["guardrails"] as const,
+  users: ["users"] as const,
+  user: (id: string) => ["user", id] as const,
+  feedbackLoop: ["feedback-loop"] as const,
+  replay: (id: string) => ["replay", id] as const,
 };
