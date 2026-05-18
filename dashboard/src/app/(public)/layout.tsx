@@ -32,7 +32,7 @@ export default function PublicLayout({
               My history
             </Link>
             <Link
-              href="/admin"
+              href="/login"
               className="text-muted-foreground/50 transition-colors hover:text-foreground"
             >
               Admin

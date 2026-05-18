@@ -360,13 +360,12 @@ export function AnswerView({ requestId }: { requestId: string }) {
               placeholder="Add a comment (optional)…"
               className="h-20 w-full resize-none rounded-md border border-border bg-secondary p-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
             />
-            <button
-              type="button"
-              onClick={() => toast("Replay is wired in a later step.")}
+            <Link
+              href={`/replay/${a.request_id}`}
               className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
             >
               <RotateCcw className="size-3" /> replay this question
-            </button>
+            </Link>
           </div>
         </div>
 

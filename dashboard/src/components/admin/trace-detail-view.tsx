@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   ArrowLeft,
   ExternalLink,
@@ -360,12 +359,10 @@ export function TraceDetailView({ requestId }: { requestId: string }) {
             </h1>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toast("Replay is wired in a later step.")}
-            >
-              <RotateCcw className="size-3.5" /> Replay
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/replay/${r.request_id}`}>
+                <RotateCcw className="size-3.5" /> Replay
+              </Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
               <Link href="/">
