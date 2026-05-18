@@ -27,6 +27,34 @@ def _get_client() -> OpenAI:
     return _client
 
 
+def _usage(response: Any) -> dict[str, int]:
+    """Extract token usage from an OpenAI response (zeros if absent)."""
+    u = getattr(response, "usage", None)
+    return {
+        "prompt_tokens": getattr(u, "prompt_tokens", 0) or 0,
+        "completion_tokens": getattr(u, "completion_tokens", 0) or 0,
+        "total_tokens": getattr(u, "total_tokens", 0) or 0,
+    }
+
+
+def chat_with_usage(
+    messages: list[dict[str, str]],
+    *,
+    model: str = CHAT_MODEL,
+    temperature: float = 0.2,
+    max_tokens: int = 1500,
+) -> tuple[str, dict[str, int]]:
+    """Plain-text completion returning (text, token-usage). Used by the
+    instrumented Phase 4 pipeline so every LLM span carries real token counts."""
+    response = _get_client().chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    return response.choices[0].message.content or "", _usage(response)
+
+
 def chat(
     messages: list[dict[str, str]],
     *,
@@ -35,13 +63,10 @@ def chat(
     max_tokens: int = 1500,
 ) -> str:
     """Plain-text chat completion. Used for narrative synthesis and answer merging."""
-    response = _get_client().chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
+    text, _ = chat_with_usage(
+        messages, model=model, temperature=temperature, max_tokens=max_tokens
     )
-    return response.choices[0].message.content or ""
+    return text
 
 
 def chat_json(
@@ -62,6 +87,27 @@ def chat_json(
     Used by the router (returns route_decision) and the SQL generator (returns
     sql + reasoning).
     """
+    content, _ = chat_json_with_usage(
+        messages,
+        schema=schema,
+        schema_name=schema_name,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    return content
+
+
+def chat_json_with_usage(
+    messages: list[dict[str, str]],
+    *,
+    schema: dict[str, Any],
+    schema_name: str,
+    model: str = CHAT_MODEL,
+    temperature: float = 0.0,
+    max_tokens: int = 800,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    """Strict-JSON completion returning (parsed_json, token-usage)."""
     response = _get_client().chat.completions.create(
         model=model,
         messages=messages,
@@ -77,4 +123,4 @@ def chat_json(
         },
     )
     content = response.choices[0].message.content or "{}"
-    return json.loads(content)
+    return json.loads(content), _usage(response)
