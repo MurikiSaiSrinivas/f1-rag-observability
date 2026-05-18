@@ -18,6 +18,33 @@ Chronological record of design decisions for the F1 RAG Observability project, i
 
 **Reasoning:** The deliverable is a *bespoke* observability UI, not a generic trace explorer — a Jaeger/Tempo trace browser would only duplicate the dashboard we hand-build. Postgres-only keeps infra to one container and the latency screens become plain SQL. OpenTelemetry instrumentation is still real (interview-credible); swapping to an OTLP collector → Tempo later is a config change, noted in code. Consistent with the hand-rolled thesis (D3.2).
 
+### D4.2 — One trace per /ask; async scoring
+**Status:** ✅ Accepted (2026-05-17)
+**Decision:** One OTel trace per `/ask`. RAGAS-style scoring + flagging run after the response via FastAPI `BackgroundTasks` so the user isn't blocked on the scorer.
+
+### D4.3 — Replays are first-class linked rows
+**Status:** ✅ Accepted (2026-05-17)
+**Decision:** A replay is a normal `requests` row with `replay_of_request_id` set — history is never overwritten. `GET /replay/{id}` runs the question under prompt-version v2 and returns the original-vs-replay comparison.
+
+### D4.4 — Prompt-version registry
+**Status:** ✅ Accepted (2026-05-17)
+**Decision:** `prompt_versions` table seeded with v1 (baseline) / v2 (stricter grounding). Threaded through `requests.prompt_version` for replay + the Quality screen's prompt-change markers.
+
+### D4.5 — Guardrails: hand-rolled, Guardrails AI deferred
+**Status:** ✅ Accepted with a deferred sub-item
+**Decision:** All ~11 guardrail rules implemented hand-rolled (regex/heuristics), including `pii_in_question`. The locked architecture wanted ONE rule via the Guardrails AI library to show DIY-vs-library fluency.
+**Considered but scratched (for now):**
+- 🕒 Guardrails AI `DetectPII` — pulls Presidio + spaCy models; heavy and version-fragile to install on this Python/OS, a real risk to a mid-build backend. Deferred; the swap is one function (`obs/guardrails._pii_match`) behind an unchanged seam. Revisit when hardening deps.
+
+### D4.6 — Scoring: gpt-4o-mini LLM-judge, not the ragas package
+**Status:** ✅ Accepted with a deferred sub-item
+**Decision:** Faithfulness / answer_relevancy / context_relevancy computed by a single strict-JSON gpt-4o-mini judge call (`obs/scoring.py`), not the `ragas` package.
+**Reasoning:** `ragas` drags in datasets/langchain and issues its own LLM calls — heavy, version-fragile, and slow. The metrics + the `scores` table contract are identical; swapping in real RAGAS later is localized behind `score_request`. 🕒 Revisit when hardening.
+
+### D4.7 — Admin auth not yet enforced
+**Status:** 🕒 Deferred (hardening follow-up)
+**Decision:** `/admin/login` sets a cookie but admin endpoints are not hard-gated yet — the Next app has no login wiring in the live-API swap and gating now would break the demo. Enforce the signed-cookie check as a hardening pass before any public deployment (ties into P5.A).
+
 ---
 
 ## Phase 3 — Routed RAG + SQL pipeline (2026-05-14)
